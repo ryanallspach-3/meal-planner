@@ -1,5 +1,3 @@
-import pdfParse from 'pdf-parse'
-
 export type ParsedPdfRecipe = {
   name: string
   ingredients: string[]
@@ -8,6 +6,8 @@ export type ParsedPdfRecipe = {
 
 export async function parsePdfRecipe(buffer: Buffer, fileName: string): Promise<ParsedPdfRecipe> {
   try {
+    // Dynamic import to avoid build-time issues
+    const pdfParse = (await import('pdf-parse')).default
     const data = await pdfParse(buffer)
     const text = data.text
 
