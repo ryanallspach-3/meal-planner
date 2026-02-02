@@ -5,11 +5,12 @@ import { aggregateIngredients, formatGroceryList } from '@/lib/utils/aggregate-i
 // GET /api/grocery-list - Generate grocery list for current week
 export async function GET(request: NextRequest) {
   try {
-    // Check API key
+    // Check API key only if one is provided (for external API access)
     const apiKey = request.headers.get('x-api-key') || request.nextUrl.searchParams.get('apiKey')
     const expectedKey = process.env.GROCERY_LIST_API_KEY
 
-    if (expectedKey && apiKey !== expectedKey) {
+    // If an API key is provided, verify it matches
+    if (apiKey && expectedKey && apiKey !== expectedKey) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
