@@ -30,11 +30,20 @@ export async function GET(request: NextRequest, { params }: Params) {
       SELECT * FROM ingredients WHERE recipe_id = ${id} ORDER BY sort_order ASC
     `
 
+    // Serialize dates to avoid React rendering errors
+    const serializedRecipe = {
+      ...recipe,
+      created_at: recipe.created_at?.toISOString(),
+      updated_at: recipe.updated_at?.toISOString(),
+      ingredients: ingredients.map((ing: any) => ({
+        ...ing,
+        created_at: ing.created_at?.toISOString(),
+        updated_at: ing.updated_at?.toISOString(),
+      }))
+    }
+
     return NextResponse.json({
-      recipe: {
-        ...recipe,
-        ingredients
-      }
+      recipe: serializedRecipe
     })
   } catch (error) {
     console.error('Failed to fetch recipe:', error)

@@ -24,7 +24,14 @@ export async function GET(request: NextRequest) {
       `
     }
 
-    return NextResponse.json({ recipes })
+    // Serialize dates to strings
+    const serializedRecipes = recipes.map((recipe: any) => ({
+      ...recipe,
+      created_at: recipe.created_at?.toISOString(),
+      updated_at: recipe.updated_at?.toISOString(),
+    }))
+
+    return NextResponse.json({ recipes: serializedRecipes })
   } catch (error) {
     console.error('Failed to fetch recipes:', error)
     return NextResponse.json(
