@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { sql } from '@/lib/db'
 import { aggregateIngredients, formatGroceryList } from '@/lib/utils/aggregate-ingredients'
 
+// Force dynamic rendering (required for request.headers)
+export const dynamic = 'force-dynamic'
+
 // GET /api/grocery-list - Generate grocery list for current week
 export async function GET(request: NextRequest) {
   try {

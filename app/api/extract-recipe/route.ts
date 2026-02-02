@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
 import { scrapeRecipeFromUrl } from '@/lib/extractors/web-scraper'
 import { parsePdfRecipe } from '@/lib/extractors/pdf-parser'
 import { parseDocxRecipe } from '@/lib/extractors/docx-parser'

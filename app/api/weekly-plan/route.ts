@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
 import { sql } from '@/lib/db'
 
 // GET /api/weekly-plan - Get current week's plan or create if doesn't exist

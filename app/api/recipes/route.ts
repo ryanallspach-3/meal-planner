@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
 import { sql } from '@/lib/db'
 import { parseIngredient } from '@/lib/extractors/ingredient-parser'
 
