@@ -44,6 +44,9 @@ const CATEGORY_NAMES: Record<string, string> = {
 export default function GroceryListPage() {
   const [items, setItems] = useState<GroceryItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [weekInfo, setWeekInfo] = useState<{ week: number; year: number } | null>(null)
+  const [error, setError] = useState('')
   const [newItemName, setNewItemName] = useState('')
   const [newItemCategory, setNewItemCategory] = useState('other')
   const [copied, setCopied] = useState(false)
@@ -53,11 +56,20 @@ export default function GroceryListPage() {
   }, [])
 
   async function loadGroceryList() {
+    setRefreshing(true)
+    setError('')
     try {
-      const res = await fetch('/api/grocery-list', { cache: 'no-store' })
-      if (!res.ok) return
-
+      const res = await fetch(`/api/grocery-list?_t=${Date.now()}`)
       const data = await res.json()
+
+      if (!res.ok) {
+        setItems([])
+        setError(data.error || 'Failed to load grocery list')
+        return
+      }
+
+      if (data.week) setWeekInfo({ week: data.week, year: data.year })
+
       const aggregated: Record<string, Array<{ name: string; totalQuantity: number | null; unit: string | null; usedIn: string[] }>> =
         data.aggregated || {}
 
@@ -79,9 +91,10 @@ export default function GroceryListPage() {
       }
       setItems(newItems)
     } catch (err) {
-      console.error('Failed to load grocery list:', err)
+      setError('Network error — check your connection')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -148,14 +161,15 @@ export default function GroceryListPage() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-1">
         <h1 className="text-3xl font-bold text-gray-900">Grocery List</h1>
         <div className="flex gap-2">
           <button
             onClick={loadGroceryList}
-            className="text-sm bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200"
+            disabled={refreshing}
+            className="text-sm bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200 disabled:opacity-50"
           >
-            Refresh
+            {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
           <button
             onClick={copyToClipboard}
@@ -167,6 +181,18 @@ export default function GroceryListPage() {
           </button>
         </div>
       </div>
+
+      {weekInfo && (
+        <p className="text-sm text-gray-500 mb-3">
+          Showing Week {weekInfo.week}, {weekInfo.year} — check your planner shows the same week
+        </p>
+      )}
+
+      {error && (
+        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-3">
+          {error}
+        </div>
+      )}
 
       {totalCount > 0 && (
         <div className="mb-4">
