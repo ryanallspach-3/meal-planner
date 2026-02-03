@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import RecipePicker from '@/components/RecipePicker'
 
 type PlannedMeal = {
@@ -173,9 +174,12 @@ export default function PlannerPage() {
                               className="bg-blue-50 border border-blue-200 rounded px-3 py-2 text-sm"
                             >
                               <div className="flex justify-between items-start">
-                                <span className="font-medium text-blue-900">
+                                <Link
+                                  href={`/recipes/${meal.recipe_id}`}
+                                  className="font-medium text-blue-900 hover:underline"
+                                >
                                   {meal.recipe_name}
-                                </span>
+                                </Link>
                                 <button
                                   onClick={() => handleRemoveMeal(meal.id)}
                                   className="text-blue-600 hover:text-blue-800 ml-2"

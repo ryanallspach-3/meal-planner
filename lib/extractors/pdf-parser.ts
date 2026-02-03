@@ -7,9 +7,11 @@ export type ParsedPdfRecipe = {
 export async function parsePdfRecipe(buffer: Buffer, fileName: string): Promise<ParsedPdfRecipe> {
   try {
     // Dynamic import to avoid build-time issues
-    const pdfParse = (await import('pdf-parse')).default
+    // Import lib path directly — the main entry point tries to open a test file at build time
+    // @ts-ignore - no declarations for the lib subpath
+    const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default
     const data = await pdfParse(buffer)
-    const text = data.text
+    const text: string = data.text
 
     // Try to extract recipe name from filename or first line
     let name = fileName.replace(/\.pdf$/i, '').trim()

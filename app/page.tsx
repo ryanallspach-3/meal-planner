@@ -7,7 +7,7 @@ export default function Home() {
       <p className="text-lg text-gray-600 mb-8">
         Plan your weekly meals and generate grocery lists effortlessly
       </p>
-      <div className="flex justify-center gap-4">
+      <div className="flex flex-wrap justify-center gap-4">
         <a
           href="/recipes"
           className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700"
@@ -19,6 +19,12 @@ export default function Home() {
           className="bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700"
         >
           Weekly Planner
+        </a>
+        <a
+          href="/grocery-list"
+          className="bg-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-purple-700"
+        >
+          Grocery List
         </a>
       </div>
     </div>

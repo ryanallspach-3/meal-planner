@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next build)",
+      "Bash(source ~/.nvm/nvm.sh)",
+      "Bash(nvm list:*)",
+      "Bash(nvm use:*)"
+    ]
+  }
+}

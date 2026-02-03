@@ -2,22 +2,51 @@
 
 import { useEffect, useState } from 'react'
 
-type AggregatedIngredient = {
+type GroceryItem = {
+  id: string
   name: string
   totalQuantity: number | null
   unit: string | null
+  category: string
   usedIn: string[]
+  purchased: boolean
+  custom: boolean
 }
 
-type GroupedIngredients = {
-  [category: string]: AggregatedIngredient[]
+const CATEGORY_ORDER = [
+  'produce',
+  'meat',
+  'seafood',
+  'dairy',
+  'pantry',
+  'canned',
+  'frozen',
+  'spices',
+  'baking',
+  'beverages',
+  'other'
+]
+
+const CATEGORY_NAMES: Record<string, string> = {
+  produce: 'Produce',
+  meat: 'Meat & Poultry',
+  seafood: 'Seafood',
+  dairy: 'Dairy & Eggs',
+  pantry: 'Pantry',
+  canned: 'Canned Goods',
+  frozen: 'Frozen',
+  spices: 'Spices & Seasonings',
+  baking: 'Baking',
+  beverages: 'Beverages',
+  other: 'Other'
 }
 
 export default function GroceryListPage() {
-  const [groceryList, setGroceryList] = useState<string>('')
-  const [aggregated, setAggregated] = useState<GroupedIngredients>({})
+  const [items, setItems] = useState<GroceryItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [newItemName, setNewItemName] = useState('')
+  const [newItemCategory, setNewItemCategory] = useState('other')
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     loadGroceryList()
@@ -25,125 +54,220 @@ export default function GroceryListPage() {
 
   async function loadGroceryList() {
     try {
-      const res = await fetch('/api/grocery-list')
+      const res = await fetch('/api/grocery-list', { cache: 'no-store' })
+      if (!res.ok) return
+
       const data = await res.json()
+      const aggregated: Record<string, Array<{ name: string; totalQuantity: number | null; unit: string | null; usedIn: string[] }>> =
+        data.aggregated || {}
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to load grocery list')
+      let idCounter = 0
+      const newItems: GroceryItem[] = []
+      for (const category of CATEGORY_ORDER) {
+        for (const item of aggregated[category] || []) {
+          newItems.push({
+            id: `api-${idCounter++}`,
+            name: item.name,
+            totalQuantity: item.totalQuantity,
+            unit: item.unit,
+            category,
+            usedIn: item.usedIn || [],
+            purchased: false,
+            custom: false
+          })
+        }
       }
-
-      setGroceryList(data.groceryList || '')
-      setAggregated(data.aggregated || {})
+      setItems(newItems)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load grocery list')
+      console.error('Failed to load grocery list:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  function copyToClipboard() {
-    navigator.clipboard.writeText(groceryList)
-    alert('Grocery list copied to clipboard!')
+  function togglePurchased(id: string) {
+    setItems(prev =>
+      prev.map(item => (item.id === id ? { ...item, purchased: !item.purchased } : item))
+    )
   }
 
-  const categoryOrder = [
-    'produce',
-    'meat',
-    'seafood',
-    'dairy',
-    'pantry',
-    'canned',
-    'frozen',
-    'spices',
-    'baking',
-    'beverages',
-    'other'
-  ]
+  function removeItem(id: string) {
+    setItems(prev => prev.filter(item => item.id !== id))
+  }
 
-  const categoryNames: Record<string, string> = {
-    produce: 'Produce',
-    meat: 'Meat & Poultry',
-    seafood: 'Seafood',
-    dairy: 'Dairy & Eggs',
-    pantry: 'Pantry',
-    canned: 'Canned Goods',
-    frozen: 'Frozen',
-    spices: 'Spices & Seasonings',
-    baking: 'Baking',
-    beverages: 'Beverages',
-    other: 'Other'
+  function addCustomItem() {
+    if (!newItemName.trim()) return
+    setItems(prev => [
+      ...prev,
+      {
+        id: `custom-${Date.now()}`,
+        name: newItemName.trim(),
+        totalQuantity: null,
+        unit: null,
+        category: newItemCategory,
+        usedIn: [],
+        purchased: false,
+        custom: true
+      }
+    ])
+    setNewItemName('')
+  }
+
+  function copyToClipboard() {
+    navigator.clipboard.writeText(generateCopyText()).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  function generateCopyText(): string {
+    const unpurchased = items.filter(i => !i.purchased)
+    if (unpurchased.length === 0) return 'All items purchased!'
+
+    let output = 'Grocery List\n\n'
+    for (const category of CATEGORY_ORDER) {
+      const categoryItems = unpurchased.filter(i => i.category === category)
+      if (categoryItems.length === 0) continue
+      output += `${CATEGORY_NAMES[category] || category}\n`
+      for (const item of categoryItems) {
+        const qty = item.totalQuantity ? `${formatQuantity(item.totalQuantity)} ${item.unit || ''} ` : ''
+        const source = item.usedIn.length > 0 ? ` (${item.usedIn.join(', ')})` : ''
+        output += `- ${qty}${item.name}${source}\n`
+      }
+      output += '\n'
+    }
+    return output.trim()
   }
 
   if (loading) {
     return <div className="text-center py-12">Loading grocery list...</div>
   }
 
-  if (error) {
-    return (
-      <div className="text-center py-12">
-        <div className="text-red-600 mb-4">{error}</div>
-        <button
-          onClick={() => window.location.reload()}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700"
-        >
-          Try Again
-        </button>
-      </div>
-    )
-  }
-
-  if (!groceryList) {
-    return (
-      <div className="text-center py-12 text-gray-500">
-        No grocery list available. Add some meals to your weekly plan first.
-      </div>
-    )
-  }
+  const purchasedCount = items.filter(i => i.purchased).length
+  const totalCount = items.length
 
   return (
-    <div className="max-w-4xl">
-      <div className="flex justify-between items-center mb-6">
+    <div className="max-w-2xl mx-auto">
+      <div className="flex justify-between items-center mb-4">
         <h1 className="text-3xl font-bold text-gray-900">Grocery List</h1>
-        <button
-          onClick={copyToClipboard}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700"
-        >
-          Copy to Clipboard
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={loadGroceryList}
+            className="text-sm bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200"
+          >
+            Refresh
+          </button>
+          <button
+            onClick={copyToClipboard}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              copied ? 'bg-green-600 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {copied ? 'Copied!' : 'Copy List'}
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white shadow rounded-lg p-6">
-        {categoryOrder.map((category) => {
-          const items = aggregated[category]
-          if (!items || items.length === 0) return null
+      {totalCount > 0 && (
+        <div className="mb-4">
+          <div className="flex justify-between text-sm text-gray-600 mb-1">
+            <span>{purchasedCount} of {totalCount} purchased</span>
+            {purchasedCount === totalCount && (
+              <span className="text-green-600 font-medium">All done!</span>
+            )}
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-green-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(purchasedCount / totalCount) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
 
-          return (
-            <div key={category} className="mb-8 last:mb-0">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 pb-2 border-b">
-                {categoryNames[category] || category}
-              </h2>
-              <ul className="space-y-2">
-                {items.map((item, index) => (
-                  <li key={index} className="flex items-start">
-                    <span className="text-gray-400 mr-3">•</span>
-                    <div className="flex-1">
-                      <span className="font-medium">
-                        {item.totalQuantity
-                          ? `${formatQuantity(item.totalQuantity)} ${item.unit || ''} `
-                          : ''}
-                        {item.name}
-                      </span>
-                      <span className="text-sm text-gray-500 ml-2">
-                        ({item.usedIn.join(', ')})
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )
-        })}
+      <div className="bg-white shadow rounded-lg p-4 mb-4">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newItemName}
+            onChange={(e) => setNewItemName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addCustomItem()}
+            placeholder="Add an item..."
+            className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          <select
+            value={newItemCategory}
+            onChange={(e) => setNewItemCategory(e.target.value)}
+            className="px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+          >
+            {CATEGORY_ORDER.map(cat => (
+              <option key={cat} value={cat}>{CATEGORY_NAMES[cat]}</option>
+            ))}
+          </select>
+          <button
+            onClick={addCustomItem}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700"
+          >
+            Add
+          </button>
+        </div>
       </div>
+
+      {totalCount === 0 ? (
+        <div className="text-center py-8 text-gray-500 bg-white shadow rounded-lg">
+          <p>Your grocery list is empty.</p>
+          <p className="text-sm mt-1">Add meals to your weekly planner, or add items above.</p>
+        </div>
+      ) : (
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          {CATEGORY_ORDER.map((category) => {
+            const categoryItems = items.filter(i => i.category === category)
+            if (categoryItems.length === 0) return null
+
+            return (
+              <div key={category} className="border-b border-gray-200 last:border-b-0">
+                <div className="px-4 py-2 bg-gray-50">
+                  <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    {CATEGORY_NAMES[category]}
+                  </h2>
+                </div>
+                <ul>
+                  {categoryItems.map((item) => (
+                    <li key={item.id} className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-b-0">
+                      <input
+                        type="checkbox"
+                        checked={item.purchased}
+                        onChange={() => togglePurchased(item.id)}
+                        className="w-5 h-5 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer flex-shrink-0"
+                      />
+                      <div className={`flex-1 min-w-0 ${item.purchased ? 'line-through text-gray-400' : ''}`}>
+                        <span>
+                          {item.totalQuantity
+                            ? `${formatQuantity(item.totalQuantity)} ${item.unit || ''} `
+                            : ''}
+                          {item.name}
+                        </span>
+                        {item.usedIn.length > 0 && (
+                          <span className={`text-sm ml-2 ${item.purchased ? 'text-gray-300' : 'text-gray-400'}`}>
+                            ({item.usedIn.join(', ')})
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => removeItem(item.id)}
+                        className="text-gray-300 hover:text-red-500 flex-shrink-0 p-2 text-lg leading-none"
+                        title="Remove"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
