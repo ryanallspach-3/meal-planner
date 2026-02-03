@@ -4,7 +4,8 @@
       "Bash(npx next build)",
       "Bash(source ~/.nvm/nvm.sh)",
       "Bash(nvm list:*)",
-      "Bash(nvm use:*)"
+      "Bash(nvm use:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

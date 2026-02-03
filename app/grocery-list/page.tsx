@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 type GroceryItem = {
   id: string
@@ -11,6 +11,16 @@ type GroceryItem = {
   usedIn: string[]
   purchased: boolean
   custom: boolean
+}
+
+type StoredOverlay = {
+  purchasedKeys: string[]
+  removedKeys: string[]
+  customItems: GroceryItem[]
+}
+
+function itemKey(item: { category: string; name: string }) {
+  return `${item.category}:${item.name.toLowerCase()}`
 }
 
 const CATEGORY_ORDER = [
@@ -41,22 +51,53 @@ const CATEGORY_NAMES: Record<string, string> = {
   other: 'Other'
 }
 
+function getStorageKey(week: number, year: number) {
+  return `grocery-list-${year}-w${week}`
+}
+
+function loadOverlay(week: number, year: number): StoredOverlay | null {
+  try {
+    const raw = localStorage.getItem(getStorageKey(week, year))
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function saveOverlay(week: number, year: number, overlay: StoredOverlay) {
+  try {
+    localStorage.setItem(getStorageKey(week, year), JSON.stringify(overlay))
+  } catch {}
+}
+
 export default function GroceryListPage() {
   const [items, setItems] = useState<GroceryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [weekInfo, setWeekInfo] = useState<{ week: number; year: number } | null>(null)
-  const [debugInfo, setDebugInfo] = useState<{ plan_id: number; meal_count: number; fetched_at: string } | null>(null)
   const [error, setError] = useState('')
   const [newItemName, setNewItemName] = useState('')
   const [newItemCategory, setNewItemCategory] = useState('other')
   const [copied, setCopied] = useState(false)
+  const initialLoadDone = useRef(false)
+  const apiItemKeys = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     loadGroceryList()
   }, [])
 
-  async function loadGroceryList() {
+  // Persist user modifications (purchased, removed, custom) to localStorage
+  useEffect(() => {
+    if (!initialLoadDone.current || !weekInfo) return
+    const purchasedKeys = items.filter(i => i.purchased && !i.custom).map(itemKey)
+    const removedKeys = Array.from(apiItemKeys.current).filter(
+      key => !items.some(i => !i.custom && itemKey(i) === key)
+    )
+    const customItems = items.filter(i => i.custom)
+    saveOverlay(weekInfo.week, weekInfo.year, { purchasedKeys, removedKeys, customItems })
+  }, [items, weekInfo])
+
+  async function loadGroceryList(forceRefresh = false) {
     setRefreshing(true)
     setError('')
     try {
@@ -70,7 +111,6 @@ export default function GroceryListPage() {
       }
 
       if (data.week) setWeekInfo({ week: data.week, year: data.year })
-      if (data._debug) setDebugInfo(data._debug)
 
       const aggregated: Record<string, Array<{ name: string; totalQuantity: number | null; unit: string | null; usedIn: string[] }>> =
         data.aggregated || {}
@@ -91,7 +131,29 @@ export default function GroceryListPage() {
           })
         }
       }
+
+      // Track which items came from the API (used to detect removals on save)
+      apiItemKeys.current = new Set(newItems.map(itemKey))
+
+      // On initial load, layer saved user changes on top of fresh API data
+      if (!forceRefresh && data.week) {
+        const overlay = loadOverlay(data.week, data.year)
+        if (overlay) {
+          const purchasedSet = new Set(overlay.purchasedKeys)
+          const removedSet = new Set(overlay.removedKeys)
+          newItems.forEach(item => {
+            if (purchasedSet.has(itemKey(item))) item.purchased = true
+          })
+          const merged = newItems.filter(item => !removedSet.has(itemKey(item)))
+          merged.push(...overlay.customItems)
+          setItems(merged)
+          initialLoadDone.current = true
+          return
+        }
+      }
+
       setItems(newItems)
+      initialLoadDone.current = true
     } catch (err) {
       setError('Network error — check your connection')
     } finally {
@@ -167,7 +229,7 @@ export default function GroceryListPage() {
         <h1 className="text-3xl font-bold text-gray-900">Grocery List</h1>
         <div className="flex gap-2">
           <button
-            onClick={loadGroceryList}
+            onClick={() => loadGroceryList(true)}
             disabled={refreshing}
             className="text-sm bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200 disabled:opacity-50"
           >
@@ -187,12 +249,6 @@ export default function GroceryListPage() {
       {weekInfo && (
         <p className="text-sm text-gray-500 mb-1">
           Showing Week {weekInfo.week}, {weekInfo.year} — check your planner shows the same week
-        </p>
-      )}
-
-      {debugInfo && (
-        <p className="text-xs text-gray-400 mb-3 font-mono">
-          plan_id={debugInfo.plan_id} meals={debugInfo.meal_count} fetched={debugInfo.fetched_at}
         </p>
       )}
 
