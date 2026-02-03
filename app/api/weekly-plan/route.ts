@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     let plans = await sql`
       SELECT * FROM weekly_plans
       WHERE week_number = ${currentWeek} AND year = ${currentYear}
+      ORDER BY id ASC
     `
 
     let plan
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest) {
     let plans = await sql`
       SELECT * FROM weekly_plans
       WHERE week_number = ${week_number} AND year = ${year}
+      ORDER BY id ASC
     `
 
     let plan

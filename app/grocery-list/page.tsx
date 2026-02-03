@@ -46,6 +46,7 @@ export default function GroceryListPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [weekInfo, setWeekInfo] = useState<{ week: number; year: number } | null>(null)
+  const [debugInfo, setDebugInfo] = useState<{ plan_id: number; meal_count: number; fetched_at: string } | null>(null)
   const [error, setError] = useState('')
   const [newItemName, setNewItemName] = useState('')
   const [newItemCategory, setNewItemCategory] = useState('other')
@@ -69,6 +70,7 @@ export default function GroceryListPage() {
       }
 
       if (data.week) setWeekInfo({ week: data.week, year: data.year })
+      if (data._debug) setDebugInfo(data._debug)
 
       const aggregated: Record<string, Array<{ name: string; totalQuantity: number | null; unit: string | null; usedIn: string[] }>> =
         data.aggregated || {}
@@ -183,8 +185,14 @@ export default function GroceryListPage() {
       </div>
 
       {weekInfo && (
-        <p className="text-sm text-gray-500 mb-3">
+        <p className="text-sm text-gray-500 mb-1">
           Showing Week {weekInfo.week}, {weekInfo.year} — check your planner shows the same week
+        </p>
+      )}
+
+      {debugInfo && (
+        <p className="text-xs text-gray-400 mb-3 font-mono">
+          plan_id={debugInfo.plan_id} meals={debugInfo.meal_count} fetched={debugInfo.fetched_at}
         </p>
       )}
 

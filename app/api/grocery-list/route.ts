@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
     const plans = await sql`
       SELECT * FROM weekly_plans
       WHERE week_number = ${week} AND year = ${year}
+      ORDER BY id ASC
     `
 
     if (plans.length === 0) {
@@ -43,9 +44,17 @@ export async function GET(request: NextRequest) {
 
     const plan = plans[0]
 
+    // Get all planned meals for this plan (used for debug info)
+    const plannedMeals = await sql`
+      SELECT pm.id, pm.recipe_id, r.name as recipe_name
+      FROM planned_meals pm
+      JOIN recipes r ON pm.recipe_id = r.id
+      WHERE pm.weekly_plan_id = ${plan.id}
+    `
+
     // Get all ingredients from planned meals
     const ingredients = await sql`
-      SELECT
+      SELECT DISTINCT
         i.quantity,
         i.unit,
         i.ingredient_name,
@@ -61,7 +70,10 @@ export async function GET(request: NextRequest) {
     if (ingredients.length === 0) {
       return NextResponse.json({
         message: 'No ingredients found. Add some meals to your weekly plan first.',
-        groceryList: ''
+        groceryList: '',
+        week,
+        year,
+        _debug: { plan_id: plan.id, meal_count: plannedMeals.length, fetched_at: new Date().toISOString() }
       })
     }
 
@@ -76,7 +88,8 @@ export async function GET(request: NextRequest) {
       week,
       year,
       groceryList: formatted,
-      aggregated
+      aggregated,
+      _debug: { plan_id: plan.id, meal_count: plannedMeals.length, fetched_at: new Date().toISOString() }
     })
   } catch (error) {
     console.error('Failed to generate grocery list:', error)
