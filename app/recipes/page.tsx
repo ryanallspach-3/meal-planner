@@ -91,25 +91,21 @@ export default function RecipesPage() {
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <ul className="divide-y divide-gray-200">
             {recipes.map((recipe) => (
-              <li key={recipe.id}>
+              <li key={recipe.id} className="flex justify-between items-start px-6 py-4 hover:bg-gray-50">
                 <Link
                   href={`/recipes/${recipe.id}`}
-                  className="block px-6 py-4 hover:bg-gray-50"
+                  className="flex-1"
                 >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-medium text-gray-900">
-                        {recipe.name}
-                      </h3>
-                      {recipe.notes && (
-                        <p className="mt-1 text-sm text-gray-600">{recipe.notes}</p>
-                      )}
-                    </div>
-                    <div className="ml-4 flex-shrink-0">
-                      {getSourceDisplay(recipe)}
-                    </div>
-                  </div>
+                  <h3 className="text-lg font-medium text-gray-900">
+                    {recipe.name}
+                  </h3>
+                  {recipe.notes && (
+                    <p className="mt-1 text-sm text-gray-600">{recipe.notes}</p>
+                  )}
                 </Link>
+                <div className="ml-4 flex-shrink-0">
+                  {getSourceDisplay(recipe)}
+                </div>
               </li>
             ))}
           </ul>
