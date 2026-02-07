@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 import { sql } from '@/lib/db'
+import { parseIngredient } from '@/lib/extractors/ingredient-parser'
 
 type Params = {
   params: Promise<{
@@ -82,6 +83,12 @@ export async function PUT(request: NextRequest, { params }: Params) {
       // Insert new ingredients
       for (let i = 0; i < ingredients.length; i++) {
         const ing = ingredients[i]
+        // Auto-categorize based on ingredient name if category not provided
+        let category = ing.category || null
+        if (!category && ing.ingredient_name) {
+          const parsed = parseIngredient(ing.ingredient_name)
+          category = parsed.category
+        }
         await sql`
           INSERT INTO ingredients (
             recipe_id, ingredient_text, quantity, unit, ingredient_name, category, sort_order
@@ -92,7 +99,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
             ${ing.quantity || null},
             ${ing.unit || null},
             ${ing.ingredient_name || null},
-            ${ing.category || null},
+            ${category},
             ${i}
           )
         `

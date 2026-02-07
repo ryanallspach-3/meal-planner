@@ -13,6 +13,12 @@ type Ingredient = {
   category: string | null
 }
 
+type EditableIngredient = {
+  name: string
+  quantity: string
+  unit: string
+}
+
 type Recipe = {
   id: number
   name: string
@@ -35,7 +41,7 @@ export default function RecipeDetailPage({
   const [editing, setEditing] = useState(false)
   const [editedName, setEditedName] = useState('')
   const [editedNotes, setEditedNotes] = useState('')
-  const [editedIngredients, setEditedIngredients] = useState<string[]>([])
+  const [editedIngredients, setEditedIngredients] = useState<EditableIngredient[]>([])
 
   useEffect(() => {
     loadRecipe()
@@ -48,7 +54,11 @@ export default function RecipeDetailPage({
       setRecipe(data.recipe)
       setEditedName(data.recipe.name)
       setEditedNotes(data.recipe.notes || '')
-      setEditedIngredients(data.recipe.ingredients.map((i: Ingredient) => i.ingredient_text))
+      setEditedIngredients(data.recipe.ingredients.map((i: Ingredient) => ({
+        name: i.ingredient_name || i.ingredient_text || '',
+        quantity: i.quantity != null ? String(i.quantity) : '',
+        unit: i.unit || ''
+      })))
     } catch (error) {
       console.error('Failed to load recipe:', error)
     } finally {
@@ -58,13 +68,27 @@ export default function RecipeDetailPage({
 
   async function handleSave() {
     try {
+      const ingredients = editedIngredients
+        .filter(i => i.name.trim())
+        .map(i => {
+          const qty = parseQuantity(i.quantity)
+          const displayQty = i.quantity.trim() ? `${i.quantity.trim()} ` : ''
+          const displayUnit = i.unit.trim() ? `${i.unit.trim()} ` : ''
+          return {
+            ingredient_text: `${displayQty}${displayUnit}${i.name.trim()}`.trim(),
+            quantity: qty,
+            unit: i.unit.trim() || null,
+            ingredient_name: i.name.trim()
+          }
+        })
+
       const res = await fetch(`/api/recipes/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editedName,
           notes: editedNotes,
-          ingredients: editedIngredients.filter(i => i.trim()).map(text => ({ ingredient_text: text }))
+          ingredients
         })
       })
 
@@ -75,6 +99,32 @@ export default function RecipeDetailPage({
     } catch (error) {
       console.error('Failed to save recipe:', error)
     }
+  }
+
+  function parseQuantity(str: string): number | null {
+    const s = str.trim()
+    if (!s) return null
+
+    // Handle fractions like "1/2" or "1 1/2"
+    if (s.includes('/')) {
+      const parts = s.split(/\s+/)
+      let total = 0
+      for (const part of parts) {
+        if (part.includes('/')) {
+          const [num, den] = part.split('/').map(Number)
+          if (!isNaN(num) && !isNaN(den) && den !== 0) {
+            total += num / den
+          }
+        } else {
+          const n = parseFloat(part)
+          if (!isNaN(n)) total += n
+        }
+      }
+      return total || null
+    }
+
+    const n = parseFloat(s)
+    return isNaN(n) ? null : n
   }
 
   async function handleDelete() {
@@ -135,17 +185,46 @@ export default function RecipeDetailPage({
 
           <div className="bg-white shadow rounded-lg p-6 mb-6">
             <h2 className="text-xl font-semibold mb-4">Ingredients</h2>
+            <div className="grid grid-cols-[1fr_80px_100px_auto] gap-2 mb-2 text-sm font-medium text-gray-500">
+              <span>Ingredient</span>
+              <span>Qty</span>
+              <span>Unit</span>
+              <span></span>
+            </div>
             {editedIngredients.map((ing, index) => (
-              <div key={index} className="flex gap-2 mb-2">
+              <div key={index} className="grid grid-cols-[1fr_80px_100px_auto] gap-2 mb-2">
                 <input
                   type="text"
-                  value={ing}
+                  value={ing.name}
                   onChange={(e) => {
                     const newIngs = [...editedIngredients]
-                    newIngs[index] = e.target.value
+                    newIngs[index] = { ...ing, name: e.target.value }
                     setEditedIngredients(newIngs)
                   }}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg"
+                  placeholder="e.g. Onion"
+                  className="px-3 py-2 border border-gray-300 rounded-lg"
+                />
+                <input
+                  type="text"
+                  value={ing.quantity}
+                  onChange={(e) => {
+                    const newIngs = [...editedIngredients]
+                    newIngs[index] = { ...ing, quantity: e.target.value }
+                    setEditedIngredients(newIngs)
+                  }}
+                  placeholder="1.5"
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-center"
+                />
+                <input
+                  type="text"
+                  value={ing.unit}
+                  onChange={(e) => {
+                    const newIngs = [...editedIngredients]
+                    newIngs[index] = { ...ing, unit: e.target.value }
+                    setEditedIngredients(newIngs)
+                  }}
+                  placeholder="cups"
+                  className="px-3 py-2 border border-gray-300 rounded-lg"
                 />
                 <button
                   onClick={() => setEditedIngredients(editedIngredients.filter((_, i) => i !== index))}
@@ -156,7 +235,7 @@ export default function RecipeDetailPage({
               </div>
             ))}
             <button
-              onClick={() => setEditedIngredients([...editedIngredients, ''])}
+              onClick={() => setEditedIngredients([...editedIngredients, { name: '', quantity: '', unit: '' }])}
               className="text-blue-600 hover:text-blue-700 text-sm font-medium mt-2"
             >
               + Add Ingredient

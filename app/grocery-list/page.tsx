@@ -2,11 +2,15 @@
 
 import { useEffect, useState, useRef } from 'react'
 
+type QuantityGroup = {
+  amount: number
+  unit: string
+}
+
 type GroceryItem = {
   id: string
   name: string
-  totalQuantity: number | null
-  unit: string | null
+  quantities: QuantityGroup[]
   category: string
   usedIn: string[]
   purchased: boolean
@@ -112,7 +116,7 @@ export default function GroceryListPage() {
 
       if (data.week) setWeekInfo({ week: data.week, year: data.year })
 
-      const aggregated: Record<string, Array<{ name: string; totalQuantity: number | null; unit: string | null; usedIn: string[] }>> =
+      const aggregated: Record<string, Array<{ name: string; quantities: QuantityGroup[]; usedIn: string[] }>> =
         data.aggregated || {}
 
       let idCounter = 0
@@ -122,8 +126,7 @@ export default function GroceryListPage() {
           newItems.push({
             id: `api-${idCounter++}`,
             name: item.name,
-            totalQuantity: item.totalQuantity,
-            unit: item.unit,
+            quantities: item.quantities || [],
             category,
             usedIn: item.usedIn || [],
             purchased: false,
@@ -179,8 +182,7 @@ export default function GroceryListPage() {
       {
         id: `custom-${Date.now()}`,
         name: newItemName.trim(),
-        totalQuantity: null,
-        unit: null,
+        quantities: [],
         category: newItemCategory,
         usedIn: [],
         purchased: false,
@@ -207,9 +209,13 @@ export default function GroceryListPage() {
       if (categoryItems.length === 0) continue
       output += `${CATEGORY_NAMES[category] || category}\n`
       for (const item of categoryItems) {
-        const qty = item.totalQuantity ? `${formatQuantity(item.totalQuantity)} ${item.unit || ''} ` : ''
+        const qtyStr = formatQuantities(item.quantities)
         const source = item.usedIn.length > 0 ? ` (${item.usedIn.join(', ')})` : ''
-        output += `- ${qty}${item.name}${source}\n`
+        if (qtyStr) {
+          output += `- ${item.name} — ${qtyStr}${source}\n`
+        } else {
+          output += `- ${item.name}${source}\n`
+        }
       }
       output += '\n'
     }
@@ -331,12 +337,12 @@ export default function GroceryListPage() {
                         className="w-5 h-5 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer flex-shrink-0"
                       />
                       <div className={`flex-1 min-w-0 ${item.purchased ? 'line-through text-gray-400' : ''}`}>
-                        <span>
-                          {item.totalQuantity
-                            ? `${formatQuantity(item.totalQuantity)} ${item.unit || ''} `
-                            : ''}
-                          {item.name}
-                        </span>
+                        <span className="font-medium">{item.name}</span>
+                        {item.quantities.length > 0 && (
+                          <span className={`ml-2 ${item.purchased ? 'text-gray-300' : 'text-gray-500'}`}>
+                            — {formatQuantities(item.quantities)}
+                          </span>
+                        )}
                         {item.usedIn.length > 0 && (
                           <span className={`text-sm ml-2 ${item.purchased ? 'text-gray-300' : 'text-gray-400'}`}>
                             ({item.usedIn.join(', ')})
@@ -362,6 +368,11 @@ export default function GroceryListPage() {
   )
 }
 
+function formatQuantities(quantities: QuantityGroup[]): string {
+  if (quantities.length === 0) return ''
+  return quantities.map(q => `${formatQuantity(q.amount)} ${q.unit}`).join(', ')
+}
+
 function formatQuantity(qty: number): string {
   const rounded = Math.round(qty * 100) / 100
   const fractions: Record<number, string> = {
@@ -377,7 +388,7 @@ function formatQuantity(qty: number): string {
 
   for (const [value, symbol] of Object.entries(fractions)) {
     if (Math.abs(decimal - parseFloat(value)) < 0.05) {
-      return whole > 0 ? `${whole} ${symbol}` : symbol
+      return whole > 0 ? `${whole}${symbol}` : symbol
     }
   }
 

@@ -6,10 +6,14 @@ type Ingredient = {
   recipe_name: string
 }
 
+type QuantityGroup = {
+  amount: number
+  unit: string
+}
+
 type AggregatedIngredient = {
   name: string
-  totalQuantity: number | null
-  unit: string | null
+  quantities: QuantityGroup[]
   category: string
   usedIn: string[]
 }
@@ -18,92 +22,95 @@ type GroupedIngredients = {
   [category: string]: AggregatedIngredient[]
 }
 
-// Unit conversion to normalize units
-const UNIT_CONVERSIONS: Record<string, { base: string; factor: number }> = {
-  // Volume
-  'cup': { base: 'cup', factor: 1 },
-  'cups': { base: 'cup', factor: 1 },
-  'tablespoon': { base: 'tablespoon', factor: 1 },
-  'tablespoons': { base: 'tablespoon', factor: 1 },
-  'tbsp': { base: 'tablespoon', factor: 1 },
-  'teaspoon': { base: 'teaspoon', factor: 1 },
-  'teaspoons': { base: 'teaspoon', factor: 1 },
-  'tsp': { base: 'teaspoon', factor: 1 },
-
-  // Weight
-  'ounce': { base: 'ounce', factor: 1 },
-  'ounces': { base: 'ounce', factor: 1 },
-  'oz': { base: 'ounce', factor: 1 },
-  'pound': { base: 'pound', factor: 1 },
-  'pounds': { base: 'pound', factor: 1 },
-  'lb': { base: 'pound', factor: 1 },
-  'lbs': { base: 'pound', factor: 1 },
-  'gram': { base: 'gram', factor: 1 },
-  'grams': { base: 'gram', factor: 1 },
-  'g': { base: 'gram', factor: 1 },
-
-  // Count
-  'clove': { base: 'clove', factor: 1 },
-  'cloves': { base: 'clove', factor: 1 },
-  'can': { base: 'can', factor: 1 },
-  'cans': { base: 'can', factor: 1 },
-  'package': { base: 'package', factor: 1 },
-  'packages': { base: 'package', factor: 1 },
+// Unit normalization (singularize and standardize)
+const UNIT_NORMALIZATIONS: Record<string, string> = {
+  'cups': 'cup',
+  'tablespoons': 'tablespoon',
+  'tbsp': 'tablespoon',
+  'teaspoons': 'teaspoon',
+  'tsp': 'teaspoon',
+  'ounces': 'ounce',
+  'oz': 'ounce',
+  'pounds': 'pound',
+  'lbs': 'pound',
+  'lb': 'pound',
+  'grams': 'gram',
+  'g': 'gram',
+  'cloves': 'clove',
+  'cans': 'can',
+  'packages': 'package',
+  'slices': 'slice',
+  'pieces': 'piece',
 }
 
-function normalizeUnit(unit: string | null): { base: string; factor: number } | null {
-  if (!unit) return null
-  const normalized = unit.toLowerCase().trim()
-  return UNIT_CONVERSIONS[normalized] || null
+function normalizeUnit(unit: string | null): string {
+  if (!unit) return 'item'
+  const lower = unit.toLowerCase().trim()
+  return UNIT_NORMALIZATIONS[lower] || lower
+}
+
+function normalizeIngredientName(name: string): string {
+  return name.toLowerCase().trim()
 }
 
 export function aggregateIngredients(ingredients: Ingredient[]): GroupedIngredients {
-  // Group by ingredient name and unit
-  const grouped: Record<string, AggregatedIngredient> = {}
+  // Group by base ingredient name (regardless of unit)
+  const byName: Record<string, {
+    displayName: string
+    category: string
+    usedIn: Set<string>
+    byUnit: Record<string, number>
+  }> = {}
 
   for (const ing of ingredients) {
     if (!ing.ingredient_name) continue
 
-    const name = ing.ingredient_name.toLowerCase().trim()
-    const normalized = normalizeUnit(ing.unit)
-    const unit = normalized?.base || ing.unit || 'item'
+    const key = normalizeIngredientName(ing.ingredient_name)
+    const unit = normalizeUnit(ing.unit)
 
-    // Create unique key for aggregation
-    const key = `${name}|${unit}`
-
-    if (!grouped[key]) {
-      grouped[key] = {
-        name: ing.ingredient_name,
-        totalQuantity: 0,
-        unit: normalized?.base || ing.unit,
+    if (!byName[key]) {
+      byName[key] = {
+        displayName: ing.ingredient_name,
         category: ing.category || 'other',
-        usedIn: []
+        usedIn: new Set(),
+        byUnit: {}
       }
     }
 
-    // Add quantity
-    if (ing.quantity && normalized) {
-      const convertedQty = ing.quantity * normalized.factor
-      grouped[key].totalQuantity = (grouped[key].totalQuantity || 0) + convertedQty
-    } else if (ing.quantity) {
-      grouped[key].totalQuantity = (grouped[key].totalQuantity || 0) + ing.quantity
+    // Sum quantities for this unit
+    if (ing.quantity) {
+      byName[key].byUnit[unit] = (byName[key].byUnit[unit] || 0) + ing.quantity
+    } else if (!byName[key].byUnit[unit]) {
+      // Track unit even without quantity
+      byName[key].byUnit[unit] = 0
     }
 
-    // Track which recipes use this ingredient
-    if (!grouped[key].usedIn.includes(ing.recipe_name)) {
-      grouped[key].usedIn.push(ing.recipe_name)
-    }
+    byName[key].usedIn.add(ing.recipe_name)
   }
 
-  // Group by category
+  // Convert to grouped structure
   const result: GroupedIngredients = {}
 
-  for (const agg of Object.values(grouped)) {
-    const category = agg.category || 'other'
+  for (const [, data] of Object.entries(byName)) {
+    const category = data.category
     if (!result[category]) {
       result[category] = []
     }
-    result[category].push(agg)
+
+    // Convert byUnit map to quantities array
+    const quantities: QuantityGroup[] = []
+    for (const [unit, amount] of Object.entries(data.byUnit)) {
+      if (amount > 0) {
+        quantities.push({ amount, unit })
+      }
+    }
+
+    result[category].push({
+      name: data.displayName,
+      quantities,
+      category,
+      usedIn: Array.from(data.usedIn)
+    })
   }
 
   // Sort each category alphabetically
@@ -152,15 +159,16 @@ export function formatGroceryList(grouped: GroupedIngredients): string {
     output += `## ${categoryNames[category] || category}\n\n`
 
     for (const item of items) {
-      const quantity = item.totalQuantity
-        ? `${formatQuantity(item.totalQuantity)} ${item.unit || ''} `
-        : ''
-
+      const quantityStr = formatQuantities(item.quantities)
       const usedIn = item.usedIn.length > 1
         ? ` (used in: ${item.usedIn.join(', ')})`
         : ` (${item.usedIn[0]})`
 
-      output += `- ${quantity}${item.name}${usedIn}\n`
+      if (quantityStr) {
+        output += `- ${item.name} — ${quantityStr}${usedIn}\n`
+      } else {
+        output += `- ${item.name}${usedIn}\n`
+      }
     }
 
     output += '\n'
@@ -169,11 +177,17 @@ export function formatGroceryList(grouped: GroupedIngredients): string {
   return output
 }
 
+function formatQuantities(quantities: QuantityGroup[]): string {
+  if (quantities.length === 0) return ''
+
+  return quantities
+    .map(q => `${formatQuantity(q.amount)} ${q.unit}`)
+    .join(', ')
+}
+
 function formatQuantity(qty: number): string {
-  // Round to 2 decimal places
   const rounded = Math.round(qty * 100) / 100
 
-  // Convert to fraction if common fraction
   const fractions: Record<number, string> = {
     0.25: '¼',
     0.33: '⅓',
@@ -187,7 +201,7 @@ function formatQuantity(qty: number): string {
 
   for (const [value, symbol] of Object.entries(fractions)) {
     if (Math.abs(decimal - parseFloat(value)) < 0.05) {
-      return whole > 0 ? `${whole} ${symbol}` : symbol
+      return whole > 0 ? `${whole}${symbol}` : symbol
     }
   }
 

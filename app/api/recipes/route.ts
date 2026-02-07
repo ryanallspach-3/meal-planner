@@ -69,20 +69,49 @@ export async function POST(request: NextRequest) {
     if (ingredients && Array.isArray(ingredients)) {
       for (let i = 0; i < ingredients.length; i++) {
         const ing = ingredients[i]
-        const ingredientText = typeof ing === 'string' ? ing : ing.ingredient_text
 
-        // Parse the ingredient
-        const parsed = parseIngredient(ingredientText)
+        let ingredientText: string
+        let quantity: number | null
+        let unit: string | null
+        let ingredientName: string | null
+        let category: string | null
+
+        if (typeof ing === 'string') {
+          // Plain text — parse it
+          ingredientText = ing
+          const parsed = parseIngredient(ing)
+          quantity = parsed.quantity
+          unit = parsed.unit
+          ingredientName = parsed.ingredient_name
+          category = parsed.category
+        } else if (ing.ingredient_name) {
+          // Structured data — use it directly
+          ingredientText = ing.ingredient_text || ing.ingredient_name
+          quantity = ing.quantity ?? null
+          unit = ing.unit || null
+          ingredientName = ing.ingredient_name
+          // Auto-categorize based on ingredient name
+          const parsed = parseIngredient(ing.ingredient_name)
+          category = ing.category || parsed.category
+        } else {
+          // Object with ingredient_text only — parse it
+          ingredientText = ing.ingredient_text
+          const parsed = parseIngredient(ingredientText)
+          quantity = parsed.quantity
+          unit = parsed.unit
+          ingredientName = parsed.ingredient_name
+          category = parsed.category
+        }
 
         await sql`
           INSERT INTO ingredients (recipe_id, ingredient_text, quantity, unit, ingredient_name, category, sort_order)
           VALUES (
             ${recipe.id},
             ${ingredientText},
-            ${parsed.quantity},
-            ${parsed.unit},
-            ${parsed.ingredient_name},
-            ${parsed.category},
+            ${quantity},
+            ${unit},
+            ${ingredientName},
+            ${category},
             ${i}
           )
         `

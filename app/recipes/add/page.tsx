@@ -9,6 +9,49 @@ type ExtractedRecipe = {
   servings?: number
 }
 
+type EditableIngredient = {
+  name: string
+  quantity: string
+  unit: string
+}
+
+// Simple parser to break raw text like "2 cups flour" into structured parts
+function parseIngredientText(text: string): EditableIngredient {
+  const s = text.trim()
+
+  // Match quantity at start (fractions, decimals, ranges)
+  const qtyMatch = s.match(/^(\d+\/\d+|\d+\s+\d+\/\d+|\d+\.?\d*)\s+/)
+  let quantity = ''
+  let remaining = s
+
+  if (qtyMatch) {
+    quantity = qtyMatch[1]
+    remaining = s.slice(qtyMatch[0].length)
+  }
+
+  // Common units
+  const units = [
+    'cups?', 'tablespoons?', 'tbsp', 'teaspoons?', 'tsp',
+    'ounces?', 'oz', 'pounds?', 'lbs?', 'lb', 'grams?', 'g',
+    'cloves?', 'cans?', 'packages?', 'slices?', 'pieces?',
+    'pinch', 'dash', 'whole'
+  ]
+
+  let unit = ''
+  const unitPattern = new RegExp(`^(${units.join('|')})\\b\\s*`, 'i')
+  const unitMatch = remaining.match(unitPattern)
+
+  if (unitMatch) {
+    unit = unitMatch[1]
+    remaining = remaining.slice(unitMatch[0].length)
+  }
+
+  // Clean up remaining text (ingredient name)
+  const name = remaining.replace(/^of\s+/i, '').trim() || s
+
+  return { name, quantity, unit }
+}
+
 export default function AddRecipePage() {
   const router = useRouter()
   const [mode, setMode] = useState<'url' | 'file' | 'manual'>('url')
@@ -17,7 +60,7 @@ export default function AddRecipePage() {
   const [name, setName] = useState('')
   const [cookbookRef, setCookbookRef] = useState('')
   const [notes, setNotes] = useState('')
-  const [ingredients, setIngredients] = useState<string[]>([''])
+  const [ingredients, setIngredients] = useState<EditableIngredient[]>([{ name: '', quantity: '', unit: '' }])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -46,7 +89,11 @@ export default function AddRecipePage() {
       const recipe: ExtractedRecipe = data.recipe
 
       setName(recipe.name)
-      setIngredients(recipe.ingredients.length > 0 ? recipe.ingredients : [''])
+      setIngredients(
+        recipe.ingredients.length > 0
+          ? recipe.ingredients.map(parseIngredientText)
+          : [{ name: '', quantity: '', unit: '' }]
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to extract recipe')
     } finally {
@@ -81,7 +128,11 @@ export default function AddRecipePage() {
       const recipe: ExtractedRecipe = data.recipe
 
       setName(recipe.name)
-      setIngredients(recipe.ingredients.length > 0 ? recipe.ingredients : [''])
+      setIngredients(
+        recipe.ingredients.length > 0
+          ? recipe.ingredients.map(parseIngredientText)
+          : [{ name: '', quantity: '', unit: '' }]
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to extract recipe')
     } finally {
@@ -95,7 +146,19 @@ export default function AddRecipePage() {
       return
     }
 
-    const filteredIngredients = ingredients.filter(i => i.trim().length > 0)
+    const structuredIngredients = ingredients
+      .filter(i => i.name.trim())
+      .map(i => {
+        const qty = parseQuantityValue(i.quantity)
+        const displayQty = i.quantity.trim() ? `${i.quantity.trim()} ` : ''
+        const displayUnit = i.unit.trim() ? `${i.unit.trim()} ` : ''
+        return {
+          ingredient_text: `${displayQty}${displayUnit}${i.name.trim()}`.trim(),
+          quantity: qty,
+          unit: i.unit.trim() || null,
+          ingredient_name: i.name.trim()
+        }
+      })
 
     setLoading(true)
     setError('')
@@ -127,7 +190,7 @@ export default function AddRecipePage() {
           source_file_name: sourceFileName,
           source_cookbook_ref: sourceCookbookRef,
           notes,
-          ingredients: filteredIngredients
+          ingredients: structuredIngredients
         })
       })
 
@@ -143,14 +206,39 @@ export default function AddRecipePage() {
     }
   }
 
-  function updateIngredient(index: number, value: string) {
+  function parseQuantityValue(str: string): number | null {
+    const s = str.trim()
+    if (!s) return null
+
+    if (s.includes('/')) {
+      const parts = s.split(/\s+/)
+      let total = 0
+      for (const part of parts) {
+        if (part.includes('/')) {
+          const [num, den] = part.split('/').map(Number)
+          if (!isNaN(num) && !isNaN(den) && den !== 0) {
+            total += num / den
+          }
+        } else {
+          const n = parseFloat(part)
+          if (!isNaN(n)) total += n
+        }
+      }
+      return total || null
+    }
+
+    const n = parseFloat(s)
+    return isNaN(n) ? null : n
+  }
+
+  function updateIngredient(index: number, field: keyof EditableIngredient, value: string) {
     const newIngredients = [...ingredients]
-    newIngredients[index] = value
+    newIngredients[index] = { ...newIngredients[index], [field]: value }
     setIngredients(newIngredients)
   }
 
   function addIngredient() {
-    setIngredients([...ingredients, ''])
+    setIngredients([...ingredients, { name: '', quantity: '', unit: '' }])
   }
 
   function removeIngredient(index: number) {
@@ -304,14 +392,35 @@ export default function AddRecipePage() {
           </button>
         </div>
 
+        <div className="grid grid-cols-[1fr_80px_100px_auto] gap-2 mb-2 text-sm font-medium text-gray-500">
+          <span>Ingredient</span>
+          <span>Qty</span>
+          <span>Unit</span>
+          <span></span>
+        </div>
+
         {ingredients.map((ingredient, index) => (
-          <div key={index} className="flex gap-2 mb-2">
+          <div key={index} className="grid grid-cols-[1fr_80px_100px_auto] gap-2 mb-2">
             <input
               type="text"
-              value={ingredient}
-              onChange={(e) => updateIngredient(index, e.target.value)}
-              placeholder="e.g., 2 cups flour"
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              value={ingredient.name}
+              onChange={(e) => updateIngredient(index, 'name', e.target.value)}
+              placeholder="e.g. Flour"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <input
+              type="text"
+              value={ingredient.quantity}
+              onChange={(e) => updateIngredient(index, 'quantity', e.target.value)}
+              placeholder="2"
+              className="px-3 py-2 border border-gray-300 rounded-lg text-center focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <input
+              type="text"
+              value={ingredient.unit}
+              onChange={(e) => updateIngredient(index, 'unit', e.target.value)}
+              placeholder="cups"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             {ingredients.length > 1 && (
               <button
