@@ -22,20 +22,26 @@ type GroupedIngredients = {
   [category: string]: AggregatedIngredient[]
 }
 
-// Unit normalization (singularize and standardize)
+// Unit normalization (singularize and standardize to abbreviations)
 const UNIT_NORMALIZATIONS: Record<string, string> = {
   'cups': 'cup',
-  'tablespoons': 'tablespoon',
-  'tbsp': 'tablespoon',
-  'teaspoons': 'teaspoon',
-  'tsp': 'teaspoon',
-  'ounces': 'ounce',
-  'oz': 'ounce',
-  'pounds': 'pound',
-  'lbs': 'pound',
-  'lb': 'pound',
-  'grams': 'gram',
-  'g': 'gram',
+  'tablespoon': 'tbsp',
+  'tablespoons': 'tbsp',
+  'teaspoon': 'tsp',
+  'teaspoons': 'tsp',
+  'ounce': 'oz',
+  'ounces': 'oz',
+  'pound': 'lb',
+  'pounds': 'lb',
+  'lbs': 'lb',
+  'gram': 'g',
+  'grams': 'g',
+  'kilogram': 'kg',
+  'kilograms': 'kg',
+  'milliliter': 'ml',
+  'milliliters': 'ml',
+  'liter': 'L',
+  'liters': 'L',
   'cloves': 'clove',
   'cans': 'can',
   'packages': 'package',

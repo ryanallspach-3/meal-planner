@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sql } from '@/lib/db'
 import { aggregateIngredients, formatGroceryList } from '@/lib/utils/aggregate-ingredients'
+import { parseIngredient } from '@/lib/extractors/ingredient-parser'
 
 // Force dynamic rendering (required for request.headers)
 export const dynamic = 'force-dynamic'
@@ -53,8 +54,9 @@ export async function GET(request: NextRequest) {
     `
 
     // Get all ingredients from planned meals
-    const ingredients = await sql`
+    const rawIngredients = await sql`
       SELECT DISTINCT
+        i.ingredient_text,
         i.quantity,
         i.unit,
         i.ingredient_name,
@@ -67,7 +69,7 @@ export async function GET(request: NextRequest) {
       ORDER BY i.category, i.ingredient_name
     `
 
-    if (ingredients.length === 0) {
+    if (rawIngredients.length === 0) {
       return NextResponse.json({
         message: 'No ingredients found. Add some meals to your weekly plan first.',
         groceryList: '',
@@ -77,8 +79,24 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // Parse ingredients on-the-fly if structured fields are null
+    const ingredients = rawIngredients.map((ing: any) => {
+      if (ing.ingredient_name) {
+        return ing
+      }
+      // Parse the raw text
+      const parsed = parseIngredient(ing.ingredient_text || '')
+      return {
+        ...ing,
+        quantity: parsed.quantity,
+        unit: parsed.unit,
+        ingredient_name: parsed.ingredient_name,
+        category: parsed.category || ing.category
+      }
+    })
+
     // Aggregate ingredients
-    const aggregated = aggregateIngredients(ingredients as any)
+    const aggregated = aggregateIngredients(ingredients)
 
     // Format as markdown
     const formatted = formatGroceryList(aggregated)

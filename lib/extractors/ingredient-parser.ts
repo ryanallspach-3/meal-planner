@@ -16,6 +16,41 @@ const UNITS = [
   'jar', 'jars', 'bottle', 'bottles', 'slice', 'slices', 'piece', 'pieces', 'whole'
 ]
 
+// Normalize units to standard abbreviations
+const UNIT_DISPLAY: Record<string, string> = {
+  'teaspoon': 'tsp',
+  'teaspoons': 'tsp',
+  'tablespoon': 'tbsp',
+  'tablespoons': 'tbsp',
+  'pound': 'lb',
+  'pounds': 'lb',
+  'lbs': 'lb',
+  'ounce': 'oz',
+  'ounces': 'oz',
+  'cup': 'cup',
+  'cups': 'cup',
+  'gram': 'g',
+  'grams': 'g',
+  'kilogram': 'kg',
+  'kilograms': 'kg',
+  'milliliter': 'ml',
+  'milliliters': 'ml',
+  'liter': 'L',
+  'liters': 'L',
+  'clove': 'clove',
+  'cloves': 'clove',
+  'can': 'can',
+  'cans': 'can',
+  'slice': 'slice',
+  'slices': 'slice',
+  'piece': 'piece',
+  'pieces': 'piece',
+}
+
+function normalizeUnit(unit: string): string {
+  return UNIT_DISPLAY[unit.toLowerCase()] || unit.toLowerCase()
+}
+
 // Ingredient categories
 const CATEGORIES: Record<string, string[]> = {
   produce: [
@@ -66,8 +101,24 @@ const CATEGORIES: Record<string, string[]> = {
   ]
 }
 
+// Word numbers to numeric values
+const WORD_NUMBERS: Record<string, number> = {
+  'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+  'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+  'a': 1, 'an': 1, 'half': 0.5
+}
+
 export function parseIngredient(text: string): ParsedIngredient {
-  const normalized = text.toLowerCase().trim()
+  let normalized = text.toLowerCase().trim()
+
+  // Convert word numbers to digits at the start
+  for (const [word, num] of Object.entries(WORD_NUMBERS)) {
+    const regex = new RegExp(`^${word}\\b\\s*`, 'i')
+    if (regex.test(normalized)) {
+      normalized = normalized.replace(regex, `${num} `)
+      break
+    }
+  }
 
   // Extract quantity (supports fractions like 1/2, 1 1/2, decimals, ranges like 2-3)
   const quantityMatch = normalized.match(/^(\d+\/\d+|\d+\s+\d+\/\d+|\d+\.?\d*|\d+-\d+)\s+/)
@@ -105,7 +156,7 @@ export function parseIngredient(text: string): ParsedIngredient {
   for (const u of UNITS) {
     const regex = new RegExp(`^${u}\\b`, 'i')
     if (regex.test(remainingText)) {
-      unit = u
+      unit = normalizeUnit(u)
       remainingText = remainingText.slice(u.length).trim()
       break
     }
@@ -114,6 +165,7 @@ export function parseIngredient(text: string): ParsedIngredient {
   // Remaining text is the ingredient name (clean up common words)
   let ingredientName = remainingText
     .replace(/^of\s+/, '')
+    .replace(/^(full|whole|large|medium|small)\s+/i, '') // Remove size modifiers at start
     .replace(/,?\s*(chopped|diced|minced|sliced|grated|shredded|fresh|dried|frozen|canned|cooked|raw|boneless|skinless).*$/i, '')
     .trim()
 
