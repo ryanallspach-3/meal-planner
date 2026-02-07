@@ -6,7 +6,8 @@
       "Bash(nvm list:*)",
       "Bash(nvm use:*)",
       "Bash(npx tsc:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }

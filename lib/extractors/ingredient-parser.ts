@@ -198,11 +198,16 @@ export function parseIngredient(text: string): ParsedIngredient {
   QUANTITY_UNIT_REGEX.lastIndex = 0
 
   let match
-  while ((match = QUANTITY_UNIT_REGEX.exec(workingText)) !== null) {
+  let iterations = 0
+  const maxIterations = workingText.length + 10 // Safety limit
+  while ((match = QUANTITY_UNIT_REGEX.exec(workingText)) !== null && iterations++ < maxIterations) {
     const [fullMatch, numericPart, unicodeFrac, unitPart] = match
 
-    // Skip empty matches
-    if (!fullMatch.trim()) continue
+    // Prevent infinite loop on empty matches
+    if (fullMatch === '') {
+      QUANTITY_UNIT_REGEX.lastIndex++
+      continue
+    }
 
     // Skip if no quantity AND no unit found
     if (!numericPart && !unicodeFrac && !unitPart) continue
