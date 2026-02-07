@@ -3,6 +3,14 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import RecipePicker from '@/components/RecipePicker'
+import {
+  DAYS_OF_WEEK,
+  getWeekNumber,
+  getWeekYear,
+  formatWeekRange,
+  formatShortDate,
+  getDateForDay
+} from '@/lib/utils/week-utils'
 
 type PlannedMeal = {
   id: number
@@ -19,7 +27,6 @@ type WeeklyPlan = {
   year: number
 }
 
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const MEAL_TYPES: ('breakfast' | 'lunch' | 'dinner')[] = ['breakfast', 'lunch', 'dinner']
 
 export default function PlannerPage() {
@@ -99,9 +106,20 @@ export default function PlannerPage() {
   async function navigateWeek(offset: number) {
     if (!plan) return
 
-    const newWeek = plan.week_number + offset
+    let newWeek = plan.week_number + offset
+    let newYear = plan.year
+
+    // Handle year boundaries
+    if (newWeek < 1) {
+      newYear--
+      newWeek = 52 // Approximate - will be corrected by API
+    } else if (newWeek > 52) {
+      newYear++
+      newWeek = 1
+    }
+
     try {
-      const res = await fetch(`/api/weekly-plan?week=${newWeek}&year=${plan.year}`)
+      const res = await fetch(`/api/weekly-plan?week=${newWeek}&year=${newYear}`)
       const data = await res.json()
       setPlan(data.plan)
       setMeals(data.meals || [])
@@ -127,7 +145,7 @@ export default function PlannerPage() {
               ← Previous
             </button>
             <span className="text-lg font-medium">
-              Week {plan.week_number}, {plan.year}
+              {formatWeekRange(plan.week_number, plan.year)}, {plan.year}
             </span>
             <button
               onClick={() => navigateWeek(1)}
@@ -158,10 +176,15 @@ export default function PlannerPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {DAYS.map((day, dayIndex) => (
+              {DAYS_OF_WEEK.map((day, dayIndex) => (
                 <tr key={day}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {day}
+                    <div>{day}</div>
+                    {plan && (
+                      <div className="text-xs text-gray-500 font-normal">
+                        {formatShortDate(getDateForDay(plan.week_number, plan.year, dayIndex))}
+                      </div>
+                    )}
                   </td>
                   {MEAL_TYPES.map((mealType) => {
                     const slotMeals = getMealsForSlot(dayIndex, mealType)

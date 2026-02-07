@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { sql } from '@/lib/db'
 import { aggregateIngredients, formatGroceryList } from '@/lib/utils/aggregate-ingredients'
 import { parseIngredient } from '@/lib/extractors/ingredient-parser'
+import { getWeekNumber, getWeekYear } from '@/lib/utils/week-utils'
 
 // Force dynamic rendering (required for request.headers)
 export const dynamic = 'force-dynamic'
@@ -26,8 +27,8 @@ export async function GET(request: NextRequest) {
     const yearParam = request.nextUrl.searchParams.get('year')
 
     const now = new Date()
-    const year = yearParam ? parseInt(yearParam) : now.getFullYear()
     const week = weekParam ? parseInt(weekParam) : getWeekNumber(now)
+    const year = yearParam ? parseInt(yearParam) : getWeekYear(now)
 
     // Get active weekly plan
     const plans = await sql`
@@ -116,13 +117,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-}
-
-// Helper function to get ISO week number
-function getWeekNumber(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-  const dayNum = d.getUTCDay() || 7
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
 }

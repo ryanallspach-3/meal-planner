@@ -5,7 +5,8 @@
       "Bash(source ~/.nvm/nvm.sh)",
       "Bash(nvm list:*)",
       "Bash(nvm use:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npx tsx:*)"
     ]
   }
 }

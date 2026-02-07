@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import { formatWeekRange, getWeekNumber, getWeekYear } from '@/lib/utils/week-utils'
 
 type QuantityGroup = {
   amount: number
@@ -101,11 +102,15 @@ export default function GroceryListPage() {
     saveOverlay(weekInfo.week, weekInfo.year, { purchasedKeys, removedKeys, customItems })
   }, [items, weekInfo])
 
-  async function loadGroceryList(forceRefresh = false) {
+  async function loadGroceryList(forceRefresh = false, targetWeek?: number, targetYear?: number) {
     setRefreshing(true)
     setError('')
     try {
-      const res = await fetch(`/api/grocery-list?_t=${Date.now()}`)
+      let url = `/api/grocery-list?_t=${Date.now()}`
+      if (targetWeek !== undefined && targetYear !== undefined) {
+        url += `&week=${targetWeek}&year=${targetYear}`
+      }
+      const res = await fetch(url)
       const data = await res.json()
 
       if (!res.ok) {
@@ -163,6 +168,26 @@ export default function GroceryListPage() {
       setLoading(false)
       setRefreshing(false)
     }
+  }
+
+  function navigateWeek(offset: number) {
+    if (!weekInfo) return
+    // Calculate new week/year
+    let newWeek = weekInfo.week + offset
+    let newYear = weekInfo.year
+
+    if (newWeek < 1) {
+      newYear--
+      newWeek = 52 // Approximate - will be corrected by API
+    } else if (newWeek > 52) {
+      newYear++
+      newWeek = 1
+    }
+
+    // Reset state for new week
+    initialLoadDone.current = false
+    apiItemKeys.current = new Set()
+    loadGroceryList(false, newWeek, newYear)
   }
 
   function togglePurchased(id: string) {
@@ -235,7 +260,7 @@ export default function GroceryListPage() {
         <h1 className="text-3xl font-bold text-gray-900">Grocery List</h1>
         <div className="flex gap-2">
           <button
-            onClick={() => loadGroceryList(true)}
+            onClick={() => loadGroceryList(true, weekInfo?.week, weekInfo?.year)}
             disabled={refreshing}
             className="text-sm bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200 disabled:opacity-50"
           >
@@ -253,9 +278,23 @@ export default function GroceryListPage() {
       </div>
 
       {weekInfo && (
-        <p className="text-sm text-gray-500 mb-1">
-          Showing Week {weekInfo.week}, {weekInfo.year} — check your planner shows the same week
-        </p>
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={() => navigateWeek(-1)}
+            className="text-sm bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200"
+          >
+            ← Prev
+          </button>
+          <span className="text-sm text-gray-600 font-medium">
+            {formatWeekRange(weekInfo.week, weekInfo.year)}, {weekInfo.year}
+          </span>
+          <button
+            onClick={() => navigateWeek(1)}
+            className="text-sm bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-200"
+          >
+            Next →
+          </button>
+        </div>
       )}
 
       {error && (

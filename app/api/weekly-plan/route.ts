@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 import { sql } from '@/lib/db'
+import { getWeekNumber, getWeekYear } from '@/lib/utils/week-utils'
 
 // GET /api/weekly-plan - Get current week's plan or create if doesn't exist
 export async function GET(request: NextRequest) {
@@ -12,10 +13,8 @@ export async function GET(request: NextRequest) {
 
     // Get current week/year if not provided
     const now = new Date()
-    const currentYear = year ? parseInt(year) : now.getFullYear()
-    const currentWeek = weekNumber
-      ? parseInt(weekNumber)
-      : getWeekNumber(now)
+    const currentWeek = weekNumber ? parseInt(weekNumber) : getWeekNumber(now)
+    const currentYear = year ? parseInt(year) : getWeekYear(now)
 
     // Find or create weekly plan
     let plans = await sql`
@@ -106,13 +105,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
-
-// Helper function to get ISO week number
-function getWeekNumber(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-  const dayNum = d.getUTCDay() || 7
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum)
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
 }
