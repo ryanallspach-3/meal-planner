@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { parseIngredient } from '@/lib/extractors/ingredient-parser'
 
 type ExtractedRecipe = {
   name: string
@@ -15,41 +16,14 @@ type EditableIngredient = {
   unit: string
 }
 
-// Simple parser to break raw text like "2 cups flour" into structured parts
+// Convert parsed ingredient to editable format
 function parseIngredientText(text: string): EditableIngredient {
-  const s = text.trim()
-
-  // Match quantity at start (fractions, decimals, ranges)
-  const qtyMatch = s.match(/^(\d+\/\d+|\d+\s+\d+\/\d+|\d+\.?\d*)\s+/)
-  let quantity = ''
-  let remaining = s
-
-  if (qtyMatch) {
-    quantity = qtyMatch[1]
-    remaining = s.slice(qtyMatch[0].length)
+  const parsed = parseIngredient(text)
+  return {
+    name: parsed.ingredient_name || text.trim(),
+    quantity: parsed.quantity != null ? String(parsed.quantity) : '',
+    unit: parsed.unit || ''
   }
-
-  // Common units
-  const units = [
-    'cups?', 'tablespoons?', 'tbsp', 'teaspoons?', 'tsp',
-    'ounces?', 'oz', 'pounds?', 'lbs?', 'lb', 'grams?', 'g',
-    'cloves?', 'cans?', 'packages?', 'slices?', 'pieces?',
-    'pinch', 'dash', 'whole'
-  ]
-
-  let unit = ''
-  const unitPattern = new RegExp(`^(${units.join('|')})\\b\\s*`, 'i')
-  const unitMatch = remaining.match(unitPattern)
-
-  if (unitMatch) {
-    unit = unitMatch[1]
-    remaining = remaining.slice(unitMatch[0].length)
-  }
-
-  // Clean up remaining text (ingredient name)
-  const name = remaining.replace(/^of\s+/i, '').trim() || s
-
-  return { name, quantity, unit }
 }
 
 export default function AddRecipePage() {

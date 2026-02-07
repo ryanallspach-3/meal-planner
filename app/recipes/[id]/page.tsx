@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { parseIngredient } from '@/lib/extractors/ingredient-parser'
 
 type Ingredient = {
   id: number
@@ -54,11 +55,23 @@ export default function RecipeDetailPage({
       setRecipe(data.recipe)
       setEditedName(data.recipe.name)
       setEditedNotes(data.recipe.notes || '')
-      setEditedIngredients(data.recipe.ingredients.map((i: Ingredient) => ({
-        name: i.ingredient_name || i.ingredient_text || '',
-        quantity: i.quantity != null ? String(i.quantity) : '',
-        unit: i.unit || ''
-      })))
+      setEditedIngredients(data.recipe.ingredients.map((i: Ingredient) => {
+        // If structured fields exist, use them
+        if (i.ingredient_name && (i.quantity != null || i.unit)) {
+          return {
+            name: i.ingredient_name,
+            quantity: i.quantity != null ? String(i.quantity) : '',
+            unit: i.unit || ''
+          }
+        }
+        // Otherwise, parse from ingredient_text
+        const parsed = parseIngredient(i.ingredient_text || '')
+        return {
+          name: parsed.ingredient_name || i.ingredient_text || '',
+          quantity: parsed.quantity != null ? String(parsed.quantity) : '',
+          unit: parsed.unit || ''
+        }
+      }))
     } catch (error) {
       console.error('Failed to load recipe:', error)
     } finally {
