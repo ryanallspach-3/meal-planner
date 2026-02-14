@@ -77,3 +77,16 @@ $$ language 'plpgsql';
 
 CREATE TRIGGER update_recipes_updated_at BEFORE UPDATE ON recipes
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Grocery list overlay (syncs purchased/removed/custom items across devices)
+CREATE TABLE IF NOT EXISTS grocery_list_items (
+  id SERIAL PRIMARY KEY,
+  weekly_plan_id INTEGER NOT NULL REFERENCES weekly_plans(id) ON DELETE CASCADE,
+  item_name VARCHAR(255) NOT NULL,
+  category VARCHAR(50) NOT NULL DEFAULT 'other',
+  purchased BOOLEAN DEFAULT false,
+  removed BOOLEAN DEFAULT false,
+  custom BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_grocery_list_items_plan ON grocery_list_items(weekly_plan_id);

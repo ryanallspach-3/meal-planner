@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { formatWeekRange, getWeekNumber, getWeekYear } from '@/lib/utils/week-utils'
 
 type QuantityGroup = {
@@ -56,22 +56,23 @@ const CATEGORY_NAMES: Record<string, string> = {
   other: 'Other'
 }
 
-function getStorageKey(week: number, year: number) {
-  return `grocery-list-${year}-w${week}`
-}
-
-function loadOverlay(week: number, year: number): StoredOverlay | null {
+async function fetchOverlay(week: number, year: number): Promise<StoredOverlay | null> {
   try {
-    const raw = localStorage.getItem(getStorageKey(week, year))
-    return raw ? JSON.parse(raw) : null
+    const res = await fetch(`/api/grocery-list/overlay?week=${week}&year=${year}`)
+    if (!res.ok) return null
+    return await res.json()
   } catch {
     return null
   }
 }
 
-function saveOverlay(week: number, year: number, overlay: StoredOverlay) {
+async function postOverlay(week: number, year: number, overlay: StoredOverlay) {
   try {
-    localStorage.setItem(getStorageKey(week, year), JSON.stringify(overlay))
+    await fetch('/api/grocery-list/overlay', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ week, year, overlay })
+    })
   } catch {}
 }
 
@@ -86,21 +87,32 @@ export default function GroceryListPage() {
   const [copied, setCopied] = useState(false)
   const initialLoadDone = useRef(false)
   const apiItemKeys = useRef<Set<string>>(new Set())
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const debouncedSave = useCallback(() => {
+    if (!initialLoadDone.current || !weekInfo) return
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      const purchasedKeys = items.filter(i => i.purchased && !i.custom).map(itemKey)
+      const removedKeys = Array.from(apiItemKeys.current).filter(
+        key => !items.some(i => !i.custom && itemKey(i) === key)
+      )
+      const customItems = items.filter(i => i.custom)
+      postOverlay(weekInfo.week, weekInfo.year, { purchasedKeys, removedKeys, customItems })
+    }, 500)
+  }, [items, weekInfo])
 
   useEffect(() => {
     loadGroceryList()
   }, [])
 
-  // Persist user modifications (purchased, removed, custom) to localStorage
+  // Persist user modifications to database (debounced)
   useEffect(() => {
-    if (!initialLoadDone.current || !weekInfo) return
-    const purchasedKeys = items.filter(i => i.purchased && !i.custom).map(itemKey)
-    const removedKeys = Array.from(apiItemKeys.current).filter(
-      key => !items.some(i => !i.custom && itemKey(i) === key)
-    )
-    const customItems = items.filter(i => i.custom)
-    saveOverlay(weekInfo.week, weekInfo.year, { purchasedKeys, removedKeys, customItems })
-  }, [items, weekInfo])
+    debouncedSave()
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+    }
+  }, [debouncedSave])
 
   async function loadGroceryList(forceRefresh = false, targetWeek?: number, targetYear?: number) {
     setRefreshing(true)
@@ -143,9 +155,9 @@ export default function GroceryListPage() {
       // Track which items came from the API (used to detect removals on save)
       apiItemKeys.current = new Set(newItems.map(itemKey))
 
-      // On initial load, layer saved user changes on top of fresh API data
-      if (!forceRefresh && data.week) {
-        const overlay = loadOverlay(data.week, data.year)
+      // Layer saved user changes (from database) on top of fresh API data
+      if (data.week) {
+        const overlay = await fetchOverlay(data.week, data.year)
         if (overlay) {
           const purchasedSet = new Set(overlay.purchasedKeys)
           const removedSet = new Set(overlay.removedKeys)
